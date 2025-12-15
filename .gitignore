@@ -1,0 +1,7 @@
+env/
+.env
+__pycache__/
+venv/
+dump/
+failed_uploads_log.xlsx
+IKS Members List.xlsx
