@@ -1,17 +1,42 @@
 {
-  "functions": {
-    "api/**/*.py": {
-      "memory": 1024,
-      "maxDuration": 60
-    }
-  },
-  "routes": [
+
+  "version": 2,
+
+  "builds": [
+
     {
-      "src": "/(.*)",
-      "dest": "api/main.py"
+
+      "src": "api/main.py",
+
+      "use": "@vercel/python",
+
+      "config": {
+
+        "runtime": "python3.9"
+
+      }
+
     }
+
   ],
+
+  "routes": [
+
+    {
+
+      "src": "/(.*)",
+
+      "dest": "api/main.py"
+
+    }
+
+  ],
+
   "env": {
+
     "PYTHONDONTWRITEBYTECODE": "1"
+
   }
+
 }
+ 
