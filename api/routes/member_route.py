@@ -3,7 +3,8 @@ from fastapi import Depends, HTTPException, APIRouter, Body, Path,Query,status, 
 from pydantic import BaseModel
 from typing import Optional
 from api.model.member_model import Member, MemberUpdate, NonMember
-from api.utils.db import members_collection, non_members_collection
+from api.utils.db import members_collection, non_members_collection, db
+from pymongo import ReturnDocument
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import jwt
 from api.conf import SECRET_KEY
@@ -18,10 +19,48 @@ class PhoneLookup(BaseModel):
     phone: str
 
 
-MEMBER_ID_COUNTER = 1345
+# Initialize a persistent counter in MongoDB if it doesn't exist.
+# We set seq to 1344 so that the first increment returns 1345.
+try:
+    db.counters.update_one({"_id": "memberid"}, {"$setOnInsert": {"seq": 1344}}, upsert=True)
+except Exception:
+    # If DB isn't available at import time, we'll let operations fail later with clearer DB errors.
+    pass
 
+def get_next_member_id():
+    """Using index and sort for performance."""
+    try:
+        # Ensure index exists (run once, can be in initialization)
+        members_collection.create_index([("id", 1)])
+        
+        # Get the document with the largest id
+        max_doc = members_collection.find_one(
+            {"id": {"$regex": "^[0-9]+$"}},  # Only numeric string IDs
+            sort=[("id", -1)]  # Sort descending
+        )
+        
+        max_id = int(max_doc["id"]) if max_doc else 0
 
+        # Sync counter
+        db.counters.update_one(
+            {"_id": "memberid"},
+            {"$max": {"seq": max_id}},
+            upsert=True
+        )
 
+        # Increment
+        counter_doc = db.counters.find_one_and_update(
+            {"_id": "memberid"},
+            {"$inc": {"seq": 1}},
+            upsert=True,
+            return_document=ReturnDocument.AFTER,
+        )
+
+        return str(counter_doc["seq"])
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"ID allocation error: {e}")
+    
 async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
         token = credentials.credentials
@@ -39,10 +78,8 @@ async def register_member(member: Member,user=Depends(verify_token)):
     if members_collection.find_one({"$or": [{"phone": member.phone}, {"email": member.email}]}):
         raise HTTPException(status_code=400, detail="Member with this phone or email already exists.")
 
-    # Generate new ID
-    global MEMBER_ID_COUNTER
-    generated_id = str(MEMBER_ID_COUNTER)
-    MEMBER_ID_COUNTER += 1
+    # Generate new ID using an atomic DB counter (safe across processes)
+    generated_id = get_next_member_id()
 
     member_dict = member.model_dump()
     member_dict.pop("id", None)  
@@ -64,10 +101,8 @@ async def register_member(member: Member):
     if members_collection.find_one({"$or": [{"phone": member.phone}, {"email": member.email}]}):
         raise HTTPException(status_code=400, detail="Member with this ID or email already exists.")
     
-    # Generate a new ID and make sure it's a string
-    global MEMBER_ID_COUNTER
-    member.id = str(MEMBER_ID_COUNTER)
-    MEMBER_ID_COUNTER += 1
+    # Generate a new ID using the DB-backed counter
+    member.id = get_next_member_id()
 
     # Insert into collection
     result = members_collection.insert_one(member.model_dump())
