@@ -19,13 +19,6 @@ class PhoneLookup(BaseModel):
     phone: str
 
 
-# Initialize a persistent counter in MongoDB if it doesn't exist.
-# We set seq to 1344 so that the first increment returns 1345.
-try:
-    db.counters.update_one({"_id": "memberid"}, {"$setOnInsert": {"seq": 1344}}, upsert=True)
-except Exception:
-    # If DB isn't available at import time, we'll let operations fail later with clearer DB errors.
-    pass
 
 def get_next_member_id():
     """Using index and sort for performance."""
@@ -61,6 +54,7 @@ def get_next_member_id():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"ID allocation error: {e}")
     
+
 async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
         token = credentials.credentials
