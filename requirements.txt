@@ -4,7 +4,7 @@ pydantic==2.10.6
 pymongo==4.11.1
 python-dotenv==1.0.1
 python-multipart==0.0.20
-razorpay==1.4.2
+razorpay==2.0.0
 requests==2.32.3
 passlib==1.7.4
 PyJWT==2.10.1
